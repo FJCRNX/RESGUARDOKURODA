@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Analizador de Resguardos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f5f6fa;color:#1e293b;font-size:13px}
+header{background:#fff;border-bottom:1px solid #e2e8f0;padding:14px 20px;display:flex;align-items:center;gap:12px}
+header h1{font-size:16px;font-weight:700;color:#0f172a}
+header span{font-size:12px;color:#64748b;margin-left:auto}
+.toolbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.upload-btn{display:inline-flex;align-items:center;gap:6px;background:#0ea5e9;color:#fff;border:none;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;transition:.15s}
+.upload-btn:hover{background:#0284c7}
+.upload-btn input{display:none}
+select,input[type=range]{border:1px solid #e2e8f0;border-radius:6px;padding:5px 10px;font-size:12px;background:#fff;color:#1e293b;height:30px}
+label{font-size:12px;color:#475569;font-weight:500}
+.btn-excel{display:inline-flex;align-items:center;gap:6px;background:#16a34a;color:#fff;border:none;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;margin-left:auto;transition:.15s}
+.btn-excel:hover{background:#15803d}
+.btn-excel:disabled{background:#94a3b8;cursor:not-allowed}
+.range-display{font-size:11px;color:#0ea5e9;font-weight:700;min-width:80px}
+main{padding:16px 20px}
+.stats{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.stat{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:130px}
+.stat .val{font-size:22px;font-weight:800;color:#0f172a}
+.stat .lbl{font-size:11px;color:#64748b;margin-top:2px}
+.stat.warn .val{color:#f59e0b}
+.stat.danger .val{color:#ef4444}
+.table-wrap{background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{background:#f8fafc;padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:#475569;border-bottom:2px solid #e2e8f0;white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{background:#f1f5f9}
+th .sort-icon{margin-left:4px;opacity:.5}
+td{padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:12px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8fafc}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
+.badge-low{background:#fef9c3;color:#854d0e}
+.badge-med{background:#ffedd5;color:#c2410c}
+.badge-high{background:#fee2e2;color:#b91c1c}
+.badge-ok{background:#dcfce7;color:#15803d}
+.dias-cell{font-weight:700;text-align:right}
+.ctd-cell{text-align:right;font-variant-numeric:tabular-nums}
+.empty{text-align:center;padding:40px;color:#94a3b8}
+.ref-group{background:#f0f9ff;font-weight:700;color:#0369a1}
+.ref-group td{padding:6px 12px;font-size:11px}
+.detalle td{background:#fff}
+.detalle td:first-child{padding-left:28px;color:#475569}
+.tag{font-size:10px;background:#e2e8f0;color:#475569;border-radius:4px;padding:1px 5px}
+#drop-hint{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:#94a3b8;gap:8px}
+#drop-hint svg{opacity:.3}
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+  <h1>Analizador de Resguardos Pendientes</h1>
+  <span id="load-info">Sin archivo cargado</span>
+</header>
+
+<div class="toolbar">
+  <label class="upload-btn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    Cargar Excel
+    <input type="file" accept=".xlsx,.xls" id="file-input">
+  </label>
+
+  <label>Centro</label>
+  <select id="fil-centro"><option value="">Todos</option></select>
+
+  <label>Días pendiente</label>
+  <input type="range" id="fil-dias" min="0" max="300" step="10" value="0">
+  <span class="range-display" id="dias-label">Todos</span>
+
+  <button class="btn-excel" id="btn-dl" disabled>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Descargar Excel
+  </button>
+</div>
+
+<main>
+  <div class="stats" id="stats-row" style="display:none"></div>
+  <div class="table-wrap">
+    <div id="drop-hint">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+      <span>Carga un archivo Excel con la plantilla de resguardos</span>
+    </div>
+    <table id="tbl" style="display:none">
+      <thead>
+        <tr>
+          <th onclick="sortBy('ref')">Referencia <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('centro')">Centro <span class="sort-icon">↕</span></th>
+          <th>Doc. Material</th>
+          <th onclick="sortBy('material')">Material <span class="sort-icon">↕</span></th>
+          <th>Descripción</th>
+          <th onclick="sortBy('fecha')">Fecha entrada <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('dias')" style="text-align:right">Días <span class="sort-icon">↕</span></th>
+          <th style="text-align:right">Ctd. Pendiente</th>
+          <th>UM</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+let allData = [], filtered = [], sortCol = 'dias', sortDir = -1;
+const today = new Date(); today.setHours(0,0,0,0);
+
+function daysDiff(d){
+  if(!d) return 0;
+  const dt = d instanceof Date ? d : new Date(d);
+  return Math.floor((today - dt) / 86400000);
+}
+
+function parseDateSerial(v){
+  if(v instanceof Date) return v;
+  if(typeof v === 'number') return new Date(Math.round((v - 25569)*86400*1000));
+  return null;
+}
+
+function badge(dias){
+  if(dias <= 10) return ['badge-ok','≤10 días'];
+  if(dias <= 30) return ['badge-low','11-30 días'];
+  if(dias <= 60) return ['badge-med','31-60 días'];
+  return ['badge-high','>60 días'];
+}
+
+document.getElementById('file-input').addEventListener('change', e => loadFile(e.target.files[0]));
+
+function loadFile(file){
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    const wb = XLSX.read(ev.target.result, {type:'binary', cellDates:true});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {raw:false, dateNF:'yyyy-mm-dd', defval:''});
+    processData(rows, file.name);
+  };
+  r.readAsBinaryString(file);
+}
+
+function col(row, ...keys){
+  for(const k of keys){ if(row[k]!==undefined) return row[k]; }
+  return '';
+}
+
+function processData(rows, fname){
+  // Agrupar por Material+Referencia y sumar Ctd
+  const map = {};
+  rows.forEach(r => {
+    const mat = (col(r,'Material','material') || '').trim();
+    const ref = (col(r,'Referencia','referencia') || '').trim();
+    const ctd = parseFloat(col(r,'Ctd.en UM entrada','ctd en um entrada','Ctd. en UM entrada') || 0);
+    const centro = (col(r,'Centro','centro') || '').trim();
+    const um = (col(r,'Un.medida de entrada','un medida de entrada','Un. medida de entrada') || '').trim();
+    const desc = (col(r,'Texto breve de material','texto breve de material') || '').trim();
+    const fechaRaw = col(r,'Fecha de entrada','fecha de entrada');
+    const usuario = (col(r,'Nombre del usuario','nombre del usuario') || '').trim();
+    const texto = (col(r,'Texto cab.documento','texto cab documento') || '').trim();
+    const docmat = (col(r,'Documento material','documento material') || '').trim();
+
+    if(!ref || !mat) return;
+    const key = mat + '||' + ref;
+    if(!map[key]){
+      map[key] = {ref, centro, mat, desc, um, ctd:0, fecha:null, usuario, texto, docmat};
+    }
+    map[key].ctd += ctd;
+    // Tomar la fecha más antigua
+    let fd = null;
+    if(fechaRaw){
+      fd = fechaRaw instanceof Date ? fechaRaw : new Date(fechaRaw);
+      if(isNaN(fd.getTime())) fd = null;
+    }
+    if(fd && (!map[key].fecha || fd < map[key].fecha)) map[key].fecha = fd;
+  });
+
+  // Filtrar solo los que tienen ctd != 0
+  allData = Object.values(map).filter(d => Math.abs(d.ctd) > 0.0001).map(d => ({
+    ...d,
+    dias: d.fecha ? daysDiff(d.fecha) : 0
+  }));
+
+  // Centros únicos
+  const centros = [...new Set(allData.map(d=>d.centro))].filter(Boolean).sort();
+  const sel = document.getElementById('fil-centro');
+  sel.innerHTML = '<option value="">Todos</option>' + centros.map(c=>`<option>${c}</option>`).join('');
+
+  // Rango dias max
+  const maxDias = Math.max(...allData.map(d=>d.dias), 10);
+  const sliderMax = Math.ceil(maxDias/10)*10;
+  const slider = document.getElementById('fil-dias');
+  slider.max = sliderMax;
+  slider.value = 0;
+  document.getElementById('dias-label').textContent = 'Todos';
+
+  document.getElementById('load-info').textContent = `${fname} · ${allData.length} renglones pendientes`;
+  document.getElementById('btn-dl').disabled = false;
+  document.getElementById('drop-hint').style.display = 'none';
+  document.getElementById('tbl').style.display = '';
+  document.getElementById('stats-row').style.display = 'flex';
+
+  render();
+}
+
+function getFilters(){
+  return {
+    centro: document.getElementById('fil-centro').value,
+    dias: parseInt(document.getElementById('fil-dias').value) || 0
+  };
+}
+
+function render(){
+  const {centro, dias} = getFilters();
+  filtered = allData.filter(d => {
+    if(centro && d.centro !== centro) return false;
+    if(dias > 0 && !(d.dias >= dias && d.dias < dias+10)) return false;
+    return true;
+  });
+
+  // Sort
+  filtered.sort((a,b) => {
+    let va = a[sortCol], vb = b[sortCol];
+    if(typeof va === 'string') va = va.toLowerCase(), vb = vb.toLowerCase();
+    return (va > vb ? 1 : va < vb ? -1 : 0) * sortDir;
+  });
+
+  renderStats();
+  renderTable();
+}
+
+function renderStats(){
+  const total = filtered.length;
+  const criticos = filtered.filter(d=>d.dias>60).length;
+  const medios = filtered.filter(d=>d.dias>30&&d.dias<=60).length;
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat"><div class="val">${total}</div><div class="lbl">Renglones pendientes</div></div>
+    <div class="stat warn"><div class="val">${medios}</div><div class="lbl">31–60 días</div></div>
+    <div class="stat danger"><div class="val">${criticos}</div><div class="lbl">>60 días críticos</div></div>
+    <div class="stat"><div class="val">${[...new Set(filtered.map(d=>d.ref))].length}</div><div class="lbl">Referencias únicas</div></div>
+  `;
+}
+
+function renderTable(){
+  const tbody = document.getElementById('tbody');
+  if(!filtered.length){
+    tbody.innerHTML = `<tr><td colspan="10" class="empty">No hay datos con los filtros seleccionados</td></tr>`;
+    return;
+  }
+  // Agrupar por referencia para mostrar
+  const byRef = {};
+  filtered.forEach(d => {
+    if(!byRef[d.ref]) byRef[d.ref] = [];
+    byRef[d.ref].push(d);
+  });
+
+  let html = '';
+  Object.entries(byRef).forEach(([ref, items]) => {
+    const maxDias = Math.max(...items.map(i=>i.dias));
+    const [bc, bt] = badge(maxDias);
+    const totalCtd = items.reduce((s,i)=>s+i.ctd,0);
+    if(items.length > 1){
+      html += `<tr class="ref-group"><td colspan="6"><b>📋 ${ref}</b> <span class="tag">${items.length} materiales</span></td>
+        <td class="dias-cell">${maxDias}d</td>
+        <td class="ctd-cell">${totalCtd.toFixed(0)}</td>
+        <td>${items[0].um}</td>
+        <td><span class="badge ${bc}">${bt}</span></td></tr>`;
+      items.forEach(d => {
+        const fd = d.fecha ? d.fecha.toLocaleDateString('es-MX') : '—';
+        html += `<tr class="detalle">
+          <td>${ref}</td><td>${d.centro}</td><td>${d.docmat||'—'}</td><td>${d.mat}</td>
+          <td>${d.desc}</td><td>${fd}</td>
+          <td class="dias-cell">${d.dias}</td>
+          <td class="ctd-cell">${d.ctd.toFixed(0)}</td>
+          <td>${d.um}</td>
+          <td><span class="badge ${badge(d.dias)[0]}">${badge(d.dias)[1]}</span></td>
+        </tr>`;
+      });
+    } else {
+      const d = items[0];
+      const fd = d.fecha ? d.fecha.toLocaleDateString('es-MX') : '—';
+      html += `<tr>
+        <td>${ref}</td><td>${d.centro}</td><td>${d.docmat||'—'}</td><td>${d.mat}</td>
+        <td>${d.desc}</td><td>${fd}</td>
+        <td class="dias-cell">${d.dias}</td>
+        <td class="ctd-cell">${d.ctd.toFixed(0)}</td>
+        <td>${d.um}</td>
+        <td><span class="badge ${bc}">${bt}</span></td>
+      </tr>`;
+    }
+  });
+  tbody.innerHTML = html;
+}
+
+function sortBy(col){
+  if(sortCol===col) sortDir *= -1; else { sortCol=col; sortDir=-1; }
+  render();
+}
+
+document.getElementById('fil-centro').addEventListener('change', render);
+document.getElementById('fil-dias').addEventListener('input', function(){
+  const v = parseInt(this.value);
+  document.getElementById('dias-label').textContent = v ? `${v}–${v+9} días` : 'Todos';
+  render();
+});
+
+document.getElementById('btn-dl').addEventListener('click', downloadExcel);
+
+// Semáforo compartido (usado también en renderTable)
+function semaforo(dias){
+  if(dias<=10) return {bg:'#C6EFCE',fg:'#1E6B35',label:'\u226410 días'};
+  if(dias<=30) return {bg:'#FFF2CC',fg:'#7D5A00',label:'11-30 días'};
+  if(dias<=60) return {bg:'#FCE4D6',fg:'#C55A11',label:'31-60 días'};
+  return {bg:'#FCCECB',fg:'#C0392B',label:'>60 días'};
+}
+
+function downloadExcel(){
+  const now = new Date();
+  const fecha = now.toLocaleDateString('es-MX');
+  const hora  = now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+
+  // Agrupar por Referencia
+  const byRef = {};
+  filtered.forEach(d => { if(!byRef[d.ref]) byRef[d.ref]=[]; byRef[d.ref].push(d); });
+  const totalCtdGlobal = filtered.reduce((s,d)=>s+d.ctd,0);
+
+  // ── Estilos CSS inline para Excel/MSO ────────────────────────────────────────
+  const BORDER = 'border:1px solid #9DB2CE';
+  const FONT   = 'font-family:Arial;font-size:10pt';
+  const C = {
+    dark : '#1B3A5C', mid  : '#2563A8', light: '#D6E4F7',
+    white: '#FFFFFF', rowA : '#F0F6FF', rowB : '#FFFFFF',
+  };
+
+  function td(val, extra=''){
+    return `<td style="${FONT};${BORDER};${extra}">${val??''}</td>`;
+  }
+  function th(val, extra=''){
+    return `<th style="${FONT};${BORDER};background:${C.dark};color:${C.white};font-weight:bold;${extra}">${val}</th>`;
+  }
+  function semTd(dias){
+    const s = semaforo(dias);
+    return td(s.label,`background:${s.bg};color:${s.fg};font-weight:bold;text-align:center`);
+  }
+  function numTd(v, bg=C.rowA){
+    return td(v,`text-align:right;background:${bg}`);
+  }
+
+  let rows = '';
+
+  // ── Título ────────────────────────────────────────────────────────────────────
+  rows += `<tr><td colspan="10" style="${FONT};font-size:13pt;font-weight:bold;background:${C.dark};color:${C.white};padding:6px 10px;border:1px solid #0D2440">
+    GRUPO KURODA — Reporte de Resguardos Pendientes de Entrega</td></tr>`;
+
+  // ── Metadatos ─────────────────────────────────────────────────────────────────
+  rows += `<tr>
+    <td colspan="4" style="${FONT};background:#EAF0FB;${BORDER};font-size:9pt">Generado: ${fecha} ${hora}</td>
+    <td colspan="3" style="${FONT};background:#EAF0FB;${BORDER};font-size:9pt">Total renglones: ${filtered.length}</td>
+    <td colspan="3" style="${FONT};background:#EAF0FB;${BORDER};font-size:9pt">Referencias: ${Object.keys(byRef).length}</td>
+  </tr><tr><td colspan="10" style="border:none">&nbsp;</td></tr>`;
+
+  // ── Encabezados ───────────────────────────────────────────────────────────────
+  rows += `<tr>
+    ${th('Referencia')}
+    ${th('Centro','text-align:center')}
+    ${th('Doc. Material','text-align:center')}
+    ${th('Material')}
+    ${th('Descripción del material')}
+    ${th('Fecha entrada','text-align:center')}
+    ${th('Días pendiente','text-align:center')}
+    ${th('Ctd. pendiente','text-align:right')}
+    ${th('UM','text-align:center')}
+    ${th('Estado','text-align:center')}
+  </tr>`;
+
+  // ── Datos agrupados ───────────────────────────────────────────────────────────
+  Object.entries(byRef).forEach(([ref, items]) => {
+    const maxDias  = Math.max(...items.map(i=>i.dias));
+    const totalCtd = items.reduce((s,i)=>s+i.ctd,0);
+    const semGrp   = semaforo(maxDias);
+
+    if(items.length > 1){
+      // Fila encabezado de grupo
+      rows += `<tr>
+        <td colspan="6" style="${FONT};${BORDER};background:${C.light};color:${C.dark};font-weight:bold;padding-left:6px">📋 ${ref} <span style="font-size:9pt;color:#555">(${items.length} materiales)</span></td>
+        <td colspan="0"></td>
+        ${numTd(totalCtd, C.light)}
+        <td style="${FONT};${BORDER};background:${C.light}"></td>
+        <td style="${FONT};${BORDER};background:${semGrp.bg};color:${semGrp.fg};font-weight:bold;text-align:center">${semGrp.label}</td>
+      </tr>`;
+      // Filas detalle con sangría
+      items.forEach((d,i) => {
+        const fd  = d.fecha ? d.fecha.toLocaleDateString('es-MX') : '';
+        const bg  = i%2===0 ? C.rowA : C.rowB;
+        const sem = semaforo(d.dias);
+        rows += `<tr>
+          ${td(ref,`background:${bg};padding-left:18px;color:#444`)}
+          ${td(d.centro,`background:${bg};text-align:center`)}
+          ${td(d.docmat||'',`background:${bg};text-align:center`)}
+          ${td(d.mat,`background:${bg}`)}
+          ${td(d.desc,`background:${bg}`)}
+          ${td(fd,`background:${bg};text-align:center`)}
+          <td style="${FONT};${BORDER};background:${sem.bg};color:${sem.fg};font-weight:bold;text-align:center">${d.dias}</td>
+          ${numTd(d.ctd,bg)}
+          ${td(d.um,`background:${bg};text-align:center`)}
+          <td style="${FONT};${BORDER};background:${sem.bg};color:${sem.fg};font-weight:bold;text-align:center">${sem.label}</td>
+        </tr>`;
+      });
+    } else {
+      const d  = items[0];
+      const fd = d.fecha ? d.fecha.toLocaleDateString('es-MX') : '';
+      const sem = semaforo(d.dias);
+      rows += `<tr>
+        ${td(ref,`background:${C.rowA}`)}
+        ${td(d.centro,`background:${C.rowA};text-align:center`)}
+        ${td(d.docmat||'',`background:${C.rowA};text-align:center`)}
+        ${td(d.mat,`background:${C.rowA}`)}
+        ${td(d.desc,`background:${C.rowA}`)}
+        ${td(fd,`background:${C.rowA};text-align:center`)}
+        <td style="${FONT};${BORDER};background:${sem.bg};color:${sem.fg};font-weight:bold;text-align:center">${d.dias}</td>
+        ${numTd(d.ctd,C.rowA)}
+        ${td(d.um,`background:${C.rowA};text-align:center`)}
+        <td style="${FONT};${BORDER};background:${sem.bg};color:${sem.fg};font-weight:bold;text-align:center">${sem.label}</td>
+      </tr>`;
+    }
+  });
+
+  // ── Total general ─────────────────────────────────────────────────────────────
+  rows += `<tr>
+    <td colspan="7" style="${FONT};${BORDER};background:${C.mid};color:${C.white};font-weight:bold;padding-left:8px">TOTAL GENERAL</td>
+    <td style="${FONT};${BORDER};background:${C.mid};color:${C.white};font-weight:bold;text-align:right">${totalCtdGlobal}</td>
+    <td colspan="2" style="${FONT};${BORDER};background:${C.mid};color:${C.white}"></td>
+  </tr>`;
+
+  // ── Ensamblar HTML MSO ────────────────────────────────────────────────────────
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="UTF-8">
+  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>
+    <x:ExcelWorksheet><x:Name>Resguardos Pendientes</x:Name>
+    <x:WorksheetOptions><x:FreezePanes/><x:FrozenNoSplit/>
+    <x:SplitHorizontal>4</x:SplitHorizontal><x:TopRowBottomPane>4</x:TopRowBottomPane>
+    </x:WorksheetOptions></x:ExcelWorksheet>
+  </x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+  </head><body>
+  <table border="0" cellspacing="0" cellpadding="4">${rows}</table>
+  </body></html>`;
+
+  const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `GK_Resguardos_Pendientes_${fecha.replace(/\//g,'-')}.xls`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+</script>
+</body>
+</html>
